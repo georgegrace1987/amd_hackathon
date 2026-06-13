@@ -324,3 +324,163 @@ def authenticate_user(user_id: str, password: str) -> dict | None:
     if row:
         return {"UserID": row[0], "UserType": row[1]}
     return None
+
+
+# ── UI functions (used by app_form.py and details_form.py) ────────────────────
+
+def authenticate_user_ui(user_id: str, password: str) -> tuple:
+    """
+    UI version — returns (True, UserType) or (False, None).
+    Used by app_form.py login handler.
+    """
+    conn   = get_conn()
+    result = conn.execute(
+        "SELECT UserType FROM user_authentication WHERE UserID=? AND Password=?",
+        [user_id, password]
+    ).fetchone()
+    conn.close()
+    if result:
+        return True, result[0]
+    return False, None
+
+
+def fetch_requests_list(user_type: str):
+    """
+    Fetch routing_decisions for a given UserType.
+    Admin sees all; others see only their team's tickets.
+    """
+    import pandas as pd
+    conn = get_routing_conn()
+    if user_type == "Admin":
+        df = conn.execute(
+            "SELECT * FROM routing_decisions ORDER BY priority ASC, routed_at DESC"
+        ).fetchdf()
+    else:
+        df = conn.execute(
+            "SELECT * FROM routing_decisions WHERE routed_team=? "
+            "ORDER BY priority ASC, routed_at DESC",
+            [user_type]
+        ).fetchdf()
+    conn.close()
+    return df
+
+
+def fetch_complaint_details(complaint_id: str) -> dict:
+    """Fetch a single routing_decision row as dict."""
+    conn = get_routing_conn()
+    row  = conn.execute(
+        "SELECT * FROM routing_decisions WHERE complaint_id=?", [complaint_id]
+    ).fetchone()
+    cols = [d[0] for d in conn.description]
+    conn.close()
+    return dict(zip(cols, row)) if row else {}
+
+
+def get_dropdown_choices() -> tuple:
+    """
+    Returns (user_ids, teams) for details_form dropdowns.
+    user_ids from user_authentication in complaints.duckdb.
+    teams from distinct routed_team in routing_decisions, falls back to TEAM_MAP.
+    """
+    c_conn   = get_conn()
+    user_ids = [r[0] for r in c_conn.execute(
+        "SELECT UserID FROM user_authentication ORDER BY UserID"
+    ).fetchall()]
+    c_conn.close()
+
+    r_conn = get_routing_conn()
+    try:
+        teams = [r[0] for r in r_conn.execute(
+            "SELECT DISTINCT routed_team FROM routing_decisions "
+            "WHERE routed_team IS NOT NULL ORDER BY routed_team"
+        ).fetchall()]
+        if not teams:
+            teams = sorted(TEAM_MAP.values())
+    except Exception:
+        teams = sorted(TEAM_MAP.values())
+    r_conn.close()
+
+    return user_ids, teams
+
+
+def update_complaint_routing(
+    complaint_id:   str,
+    routed_team:    str,
+    escalate:       bool,
+    escalate_to:    str,
+    action:         str,
+    routing_reason: str,
+    team_email:     str,
+) -> None:
+    """Update editable fields on a routing_decision row."""
+    conn = get_routing_conn()
+    conn.execute("""
+        UPDATE routing_decisions
+        SET routed_team=?, escalate=?, escalate_to=?, action=?,
+            routing_reason=?, team_email=?
+        WHERE complaint_id=?
+    """, [routed_team, escalate, escalate_to, action,
+          routing_reason, team_email, complaint_id])
+    conn.close()
+
+
+# ── Dashboard functions (used by app_form_v2.py) ──────────────────────────────
+
+def get_filter_choices() -> tuple:
+    """Return distinct category, priority, status values for dashboard dropdowns."""
+    conn       = get_routing_conn()
+    categories = [r[0] for r in conn.execute(
+        "SELECT DISTINCT category FROM routing_decisions WHERE category IS NOT NULL"
+    ).fetchall()]
+    priorities = [r[0] for r in conn.execute(
+        "SELECT DISTINCT priority FROM routing_decisions WHERE priority IS NOT NULL"
+    ).fetchall()]
+    statuses   = [r[0] for r in conn.execute(
+        "SELECT DISTINCT routing_status FROM routing_decisions WHERE routing_status IS NOT NULL"
+    ).fetchall()]
+    conn.close()
+    return categories, priorities, statuses
+
+
+def fetch_dashboard_data(
+    user_type: str,
+    category:  str = None,
+    priority:  str = None,
+    escalate:  str = None,
+    status:    str = None,
+) -> tuple:
+    """
+    Fetch filtered routing_decisions for the supervisor dashboard.
+    Returns (df, total, escalated, avg_sla, cat_df, pri_df).
+    """
+    import pandas as pd
+
+    conn   = get_routing_conn()
+    query  = "SELECT * FROM routing_decisions WHERE routed_team = ?"
+    params = [user_type]
+
+    if category: query += " AND category = ?";        params.append(category)
+    if priority: query += " AND priority = ?";        params.append(priority)
+    if escalate: query += " AND escalate = ?";        params.append(escalate == "True")
+    if status:   query += " AND routing_status = ?";  params.append(status)
+
+    df = conn.execute(query, params).fetchdf()
+    conn.close()
+
+    if df.empty:
+        return (
+            df, 0, 0, "0 hrs",
+            pd.DataFrame(columns=["Category", "Count"]),
+            pd.DataFrame(columns=["Priority",  "Count"]),
+        )
+
+    total     = len(df)
+    escalated = int(df["escalate"].sum())
+    avg_sla   = f"{df['sla_hours'].mean():.1f} hrs"
+
+    cat_df          = df["category"].value_counts().reset_index()
+    cat_df.columns  = ["Category", "Count"]
+    pri_df          = df["priority"].value_counts().reset_index()
+    pri_df.columns  = ["Priority", "Count"]
+
+    return df, total, escalated, avg_sla, cat_df, pri_df

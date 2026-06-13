@@ -1,10 +1,6 @@
 """
-data_generator.py — Synthetic BFSI data generator via vLLM.
-Generates realistic labelled complaints AND customer KYC records.
-
-Functions:
-    run_generator(count, output)  — generate synthetic complaints
-    run_kyc_generator(count)      — generate synthetic customer_kyc records
+data_generator.py — Synthetic BFSI complaint generator via vLLM.
+Generates realistic labelled complaints with customer metadata.
 """
 
 import json
@@ -15,9 +11,8 @@ from config import (
     CATEGORY_WEIGHTS, CATEGORY_ACCOUNT_AFFINITY,
     CHANNELS, MUMBAI_BRANCHES, EMAIL_DOMAINS,
     INDIAN_FIRST_NAMES, INDIAN_LAST_NAMES, JSON_PATH,
-    TIERS_CITIES,
 )
-from db import load_json_to_db, get_conn
+from db import load_json_to_db
 
 _client: OpenAI = None
 
@@ -184,148 +179,3 @@ def run_generator(count: int = 80, output: str = "both") -> list[dict]:
         dist[r["category"]] = dist.get(r["category"], 0) + 1
     print(f"\n[generator] Done. {len(dataset)} records. Distribution: {dist}")
     return dataset
-
-
-# ── KYC generator ─────────────────────────────────────────────────────────────
-
-INDIAN_STATES = [
-    "Andhra Pradesh", "Bihar", "Delhi", "Gujarat", "Haryana",
-    "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Punjab",
-    "Rajasthan", "Tamil Nadu", "Telangana", "Uttar Pradesh", "West Bengal",
-]
-
-KYC_SYSTEM_PROMPT = """You are a synthetic data generator for an Indian bank.
-Generate realistic Indian customer KYC details.
-Return ONLY a valid JSON object with these exact fields — no markdown, no extra text:
-
-- cust_phone: 10-digit Indian mobile number starting with 9, 8, 7, or 6
-- date_of_birth: date in YYYY-MM-DD format, age between 21 and 65
-- pan_number: valid format — 5 uppercase letters, 4 digits, 1 uppercase letter (e.g. ABCDE1234F)
-- aadhaar_number: 12-digit number (no spaces)
-- address: realistic Indian street address (house number, street, locality)
-- pincode: valid 6-digit Indian pincode
-
-Return ONLY the JSON object. No explanation."""
-
-
-def generate_kyc_record(customer_id: str, cust_name: str,
-                        cust_email: str, city: str) -> dict:
-    """Generate KYC fields for one customer via vLLM."""
-    user_msg = (
-        f"Customer name: {cust_name}\n"
-        f"City: {city}\n"
-        f"Generate realistic KYC details for this Indian bank customer."
-    )
-    response = get_client().chat.completions.create(
-        model=VLLM_MODEL,
-        messages=[
-            {"role": "system", "content": KYC_SYSTEM_PROMPT},
-            {"role": "user",   "content": user_msg},
-        ],
-        temperature=0.85,
-        max_tokens=200,
-    )
-    raw = response.choices[0].message.content.strip()
-
-    try:
-        fields = json.loads(raw.replace("```json", "").replace("```", "").strip())
-    except json.JSONDecodeError:
-        raise ValueError(f"Non-JSON KYC response: {raw[:150]}")
-
-    # derive state from city
-    city_state_map = {
-        "Mumbai": "Maharashtra", "Pune": "Maharashtra", "Nagpur": "Maharashtra",
-        "Delhi": "Delhi", "Noida": "Delhi", "Faridabad": "Haryana",
-        "Bangalore": "Karnataka", "Mysore": "Karnataka",
-        "Chennai": "Tamil Nadu", "Coimbatore": "Tamil Nadu", "Madurai": "Tamil Nadu",
-        "Hyderabad": "Telangana", "Warangal": "Telangana",
-        "Kolkata": "West Bengal", "Siliguri": "West Bengal",
-        "Ahmedabad": "Gujarat", "Surat": "Gujarat", "Vadodara": "Gujarat",
-        "Jaipur": "Rajasthan", "Jodhpur": "Rajasthan", "Udaipur": "Rajasthan",
-        "Lucknow": "Uttar Pradesh", "Kanpur": "Uttar Pradesh",
-        "Indore": "Madhya Pradesh", "Bhopal": "Madhya Pradesh",
-        "Chandigarh": "Punjab", "Ludhiana": "Punjab", "Amritsar": "Punjab",
-        "Kochi": "Kerala", "Thiruvananthapuram": "Kerala", "Kozhikode": "Kerala",
-        "Bhubaneswar": "Odisha", "Ranchi": "Jharkhand",
-    }
-    state = city_state_map.get(city, random.choice(INDIAN_STATES))
-
-    return {
-        "customer_id":    customer_id,
-        "cust_name":      cust_name,
-        "cust_email":     cust_email,
-        "cust_phone":     fields.get("cust_phone", ""),
-        "date_of_birth":  fields.get("date_of_birth", ""),
-        "pan_number":     fields.get("pan_number", ""),
-        "aadhaar_number": fields.get("aadhaar_number", ""),
-        "address":        fields.get("address", ""),
-        "city":           city,
-        "state":          state,
-        "pincode":        str(fields.get("pincode", "")),
-        "kyc_status":     random.choices(
-            ["verified", "pending", "rejected"],
-            weights=[0.70, 0.20, 0.10]
-        )[0],
-    }
-
-
-def generate_kyc_dataset(count: int = 20) -> list[dict]:
-    """Generate `count` synthetic KYC records via vLLM."""
-    records = []
-    for i in range(count):
-        cust_name = gen_customer_name()
-        city      = random.choice(TIERS_CITIES)
-        cust_email = gen_email(cust_name)
-        customer_id = gen_customer_id()
-        try:
-            record = generate_kyc_record(customer_id, cust_name, cust_email, city)
-            records.append(record)
-            print(f"[{i+1}/{count}] {customer_id} | {cust_name} | {city} | {record['kyc_status']}")
-        except Exception as e:
-            print(f"[{i+1}/{count}] FAILED ({cust_name}): {e}")
-    return records
-
-
-def save_kyc_to_db(records: list[dict]) -> None:
-    """Insert KYC records into customer_kyc table."""
-    if not records:
-        print("[kyc_generator] No records to save.")
-        return
-    conn = get_conn()
-    conn.executemany("""
-        INSERT OR IGNORE INTO customer_kyc (
-            customer_id, cust_name, cust_email, cust_phone,
-            date_of_birth, pan_number, aadhaar_number,
-            address, city, state, pincode, kyc_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, [
-        (
-            r["customer_id"], r["cust_name"], r.get("cust_email"), r["cust_phone"],
-            r["date_of_birth"], r["pan_number"], r["aadhaar_number"],
-            r["address"], r["city"], r["state"], r["pincode"], r["kyc_status"],
-        )
-        for r in records
-    ])
-    conn.close()
-    print(f"[kyc_generator] Saved {len(records)} KYC records to customer_kyc.")
-
-
-def run_kyc_generator(count: int = 20) -> list[dict]:
-    """
-    Generate synthetic KYC records via vLLM and save to customer_kyc table.
-    Returns list of generated records.
-    """
-    print(f"\n[kyc_generator] Generating {count} KYC records via {VLLM_MODEL}...\n")
-    records = generate_kyc_dataset(count)
-
-    if not records:
-        print("[kyc_generator] No records generated — check VLLM_MODEL and endpoint.")
-        return []
-
-    save_kyc_to_db(records)
-
-    status_dist = {}
-    for r in records:
-        status_dist[r["kyc_status"]] = status_dist.get(r["kyc_status"], 0) + 1
-    print(f"\n[kyc_generator] Done. {len(records)} records. Status: {status_dist}")
-    return records
