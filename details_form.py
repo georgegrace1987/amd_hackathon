@@ -1,13 +1,24 @@
 import gradio as gr
-from db_manager import get_dropdown_choices
+from db import get_dropdown_choices
 
 def validate_selection(selected_value, valid_choices):
     if not selected_value or selected_value.startswith("Select"):
         return ""
     return "✅ Valid selection" if selected_value in valid_choices else "⚠️ Invalid selection"
 
+FALLBACK_TEAMS = [
+    "Fraud Response Team", "Card Operations", "KYC Team",
+    "Loan Servicing", "Digital Banking", "Branch Support",
+    "Insurance Claims", "General Support",
+]
+
 def create_details_page():
-    user_ids, teams = get_dropdown_choices()
+    try:
+        user_ids, teams = get_dropdown_choices()
+        if not teams:
+            teams = FALLBACK_TEAMS
+    except Exception:
+        user_ids, teams = [], FALLBACK_TEAMS
     
     with gr.Column(visible=False) as page:
         gr.Markdown("# 📝 Complaint Details")
