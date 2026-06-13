@@ -96,66 +96,46 @@ with gr.Blocks(title="Bank Routing Portal") as app:
         outputs=[dash_total, dash_escalated, dash_sla, dash_cat_plot, dash_pri_plot, dash_table, f_cat, f_pri, f_esc, f_stat]
     )
 
-    # 3. List -- row click auto-loads details; View Details button also works
+    # 3. List — row select + view details
+    def select_row(evt: gr.SelectData):
+        return str(evt.value) if evt.value else ""
 
-    detail_outputs = [
+    req_table.select(select_row, outputs=sel_comp_id)
+
+    def load_details(comp_id):
+        if not comp_id:
+            return [gr.update()] * 21 + ["❌ No Complaint ID selected."]
+        data = fetch_complaint_details(comp_id)
+        if not data:
+            return [gr.update()] * 21 + ["❌ Complaint not found."]
+        return (
+            gr.update(visible=False), gr.update(visible=True),
+            data.get("complaint_id", ""),   data.get("routing_id", ""),
+            data.get("customer_id", ""),    data.get("cust_name", ""),
+            data.get("complaint", ""),      data.get("category", ""),
+            data.get("priority", ""),       data.get("sentiment", ""),
+            data.get("original_team", ""),  data.get("confidence", ""),
+            str(data.get("sla_hours", "")), data.get("routing_status", ""),
+            str(data.get("latency_ms", "")),data.get("routing_reason", ""),
+            data.get("team_email", ""),     data.get("routed_team", "Select team to re-route"),
+            bool(data.get("escalate", False)),
+            data.get("escalate_to", "Select ID to re-route") or "Select ID to re-route",
+            data.get("action", ""),         data.get("routing_reason", ""),
+            data.get("team_email", ""),     ""
+        )
+
+    view_btn.click(load_details, inputs=sel_comp_id, outputs=[
         list_page, details_page, d_comp_id, d_route_id, d_cust_id, d_name, d_comp,
         d_cat, d_pri, d_sent, d_orig_team, d_conf, d_sla, d_status, d_lat,
         d_reason_ro, d_email_ro, d_route_team, d_escalate, d_escalate_to,
         d_action, d_reason, d_email, update_msg
-    ]
-
-    def load_details(comp_id):
-        if not comp_id or str(comp_id).strip() == "":
-            return [gr.update()] * 23 + ["\u274c No complaint selected."]
-        data = fetch_complaint_details(str(comp_id).strip())
-        if not data:
-            return [gr.update()] * 23 + [f"\u274c Not found: {comp_id}"]
-        return (
-            gr.update(visible=False), gr.update(visible=True),
-            data.get("complaint_id", ""),    data.get("routing_id", ""),
-            data.get("customer_id", ""),     data.get("cust_name", ""),
-            data.get("complaint", ""),       data.get("category", ""),
-            data.get("priority", ""),        data.get("sentiment", ""),
-            data.get("original_team", ""),   data.get("confidence", ""),
-            str(data.get("sla_hours", "")),  data.get("routing_status", ""),
-            str(data.get("latency_ms", "")), data.get("routing_reason", ""),
-            data.get("team_email", ""),      data.get("routed_team", "Select team to re-route"),
-            bool(data.get("escalate", False)),
-            data.get("escalate_to") or "Select ID to re-route",
-            data.get("action", ""),          data.get("routing_reason", ""),
-            data.get("team_email", ""),      ""
-        )
-
-    def row_click(evt: gr.SelectData, df):
-        """Auto-load details on row click — always uses complaint_id from the row."""
-        import pandas as pd
-        try:
-            if (evt.index is not None
-                    and df is not None
-                    and isinstance(df, pd.DataFrame)
-                    and not df.empty
-                    and "complaint_id" in df.columns):
-                comp_id = str(df.iloc[evt.index[0]]["complaint_id"]).strip()
-                return [comp_id] + list(load_details(comp_id))
-        except Exception as e:
-            print(f"[row_click] {e}")
-        return [""] + [gr.update()] * 23 + ["\u274c Could not load row."]
-
-    # row click -> update sel_comp_id AND navigate to details automatically
-    req_table.select(row_click, inputs=req_table,
-                     outputs=[sel_comp_id] + detail_outputs)
-
-    # View Details button as manual fallback
-    view_btn.click(load_details, inputs=sel_comp_id, outputs=detail_outputs)
+    ])
 
     # 4. Submit update
     def handle_submit(comp_id, routed_team, escalate, escalate_to, action, routing_reason, team_email, user_type, team):
         if not action or not action.strip():
             return "❌ Action field is mandatory.", gr.update(), gr.update()
-        success = update_complaint(comp_id, routed_team, escalate, escalate_to, action, routing_reason, team_email)
-        if not success:
-            return "❌ Update failed — DB is busy. Please try again in a moment.", gr.update(), gr.update()
+        update_complaint(comp_id, routed_team, escalate, escalate_to, action, routing_reason, team_email)
         df = fetch_requests_list(user_type, team)
         return f"✅ Successfully updated Complaint ID: {comp_id}", gr.update(value=df), gr.update(visible=True)
 
