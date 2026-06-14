@@ -1,5 +1,5 @@
 import gradio as gr
-from db_manager import get_dropdown_choices
+from db import get_dropdown_choices
 
 def validate_selection(selected_value, valid_choices):
     if not selected_value or selected_value.startswith("Select"):
