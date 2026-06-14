@@ -20,8 +20,8 @@ from router import run_router
 from cust_ui import launch_ui
 
 # ── Settings ──────────────────────────────────────────────────────────────────
-SEED_DATA          = True
-SEED_COUNT         = 100
+SEED_DATA          = False
+SEED_COUNT         = 80
 POLL_INTERVAL_SECS = 60
 CUST_UI_PORT       = 10001
 EMPLOYEE_UI_PORT   = 10000

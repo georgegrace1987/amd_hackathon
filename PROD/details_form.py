@@ -6,19 +6,8 @@ def validate_selection(selected_value, valid_choices):
         return ""
     return "✅ Valid selection" if selected_value in valid_choices else "⚠️ Invalid selection"
 
-FALLBACK_TEAMS = [
-    "Fraud Response Team", "Card Operations", "KYC Team",
-    "Loan Servicing", "Digital Banking", "Branch Support",
-    "Insurance Claims", "General Support",
-]
-
 def create_details_page():
-    try:
-        user_ids, teams = get_dropdown_choices()
-        if not teams:
-            teams = FALLBACK_TEAMS
-    except Exception:
-        user_ids, teams = [], FALLBACK_TEAMS
+    user_ids, teams = get_dropdown_choices()
     
     with gr.Column(visible=False) as page:
         gr.Markdown("# 📝 Complaint Details")

@@ -5,11 +5,7 @@ user authentication, and KYC table.
 """
 
 import duckdb
-import threading
 from config import DB_PATH, ROUTING_DB, DEFAULT_USERS, TEAM_MAP
-
-# Global write lock — ensures pipeline and UI never write to routing.duckdb simultaneously
-_routing_write_lock = threading.Lock()
 
 
 # ── Connection helpers ────────────────────────────────────────────────────────
@@ -20,13 +16,8 @@ def get_conn() -> duckdb.DuckDBPyConnection:
 
 
 def get_routing_conn() -> duckdb.DuckDBPyConnection:
-    """Open a connection to routing DB with WAL mode for concurrent access."""
-    conn = duckdb.connect(ROUTING_DB)
-    try:
-        conn.execute("PRAGMA enable_checkpoint_on_shutdown")
-    except Exception:
-        pass
-    return conn
+    """Open a connection to routing DB."""
+    return duckdb.connect(ROUTING_DB)
 
 
 # ── Schema init ───────────────────────────────────────────────────────────────
@@ -264,41 +255,30 @@ def load_json_to_db(json_path: str) -> None:
 # ── Routing decisions ─────────────────────────────────────────────────────────
 
 def insert_routing_decision(d: dict) -> None:
-    """Insert or replace a routing decision record. Uses global write lock for concurrency."""
-    import time as _time
-    with _routing_write_lock:
-      max_retries = 5
-      for attempt in range(max_retries):
-        try:
-            conn = duckdb.connect(ROUTING_DB)
-            conn.execute("""
-                INSERT OR REPLACE INTO routing_decisions (
-                    routing_id, complaint_id, customer_id, cust_name, complaint,
-                    category, priority, sentiment, original_team, routed_team,
-                    escalate, escalate_to, action, routing_reason, confidence,
-                    team_email, sla_hours, complaint_created_at,
-                    routing_status, routed_at, latency_ms, model_used
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                          'routed', current_timestamp, ?, ?)
-            """, [
-                d["routing_id"],    d["complaint_id"],
-                d["customer_id"],   d["cust_name"],
-                d["complaint"],     d["category"],
-                d["priority"],      d["sentiment"],
-                d["original_team"], d["routed_team"],
-                d["escalate"],      d["escalate_to"],
-                d["action"],        d["routing_reason"],
-                d["confidence"],    d["team_email"],
-                d["sla_hours"],     d["complaint_created_at"],
-                d["latency_ms"],    d["model_used"],
-            ])
-            conn.close()
-            return
-        except duckdb.IOException as e:
-            if "lock" in str(e).lower() and attempt < max_retries - 1:
-                _time.sleep(0.3)
-            else:
-                raise
+    """Insert or replace a routing decision record."""
+    conn = get_routing_conn()
+    conn.execute("""
+        INSERT OR REPLACE INTO routing_decisions (
+            routing_id, complaint_id, customer_id, cust_name, complaint,
+            category, priority, sentiment, original_team, routed_team,
+            escalate, escalate_to, action, routing_reason, confidence,
+            team_email, sla_hours, complaint_created_at,
+            routing_status, routed_at, latency_ms, model_used
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                  'routed', current_timestamp, ?, ?)
+    """, [
+        d["routing_id"],    d["complaint_id"],
+        d["customer_id"],   d["cust_name"],
+        d["complaint"],     d["category"],
+        d["priority"],      d["sentiment"],
+        d["original_team"], d["routed_team"],
+        d["escalate"],      d["escalate_to"],
+        d["action"],        d["routing_reason"],
+        d["confidence"],    d["team_email"],
+        d["sla_hours"],     d["complaint_created_at"],
+        d["latency_ms"],    d["model_used"],
+    ])
+    conn.close()
 
 
 def fetch_unrouted() -> list[dict]:
@@ -460,36 +440,17 @@ def update_complaint_routing(
     action:         str,
     routing_reason: str,
     team_email:     str,
-    max_retries:    int = 10,
-    retry_delay:    float = 0.5,
-) -> bool:
-    """
-    Update editable fields on a routing_decision row.
-    Uses global write lock — waits for pipeline to finish before writing.
-    """
-    import time as _time
-
-    with _routing_write_lock:
-      for attempt in range(max_retries):
-        try:
-            conn = duckdb.connect(ROUTING_DB)
-            conn.execute("""
-                UPDATE routing_decisions
-                SET routed_team=?, escalate=?, escalate_to=?, action=?,
-                    routing_reason=?, team_email=?
-                WHERE complaint_id=?
-            """, [routed_team, escalate, escalate_to, action,
-                  routing_reason, team_email, complaint_id])
-            conn.close()
-            return True
-        except duckdb.IOException as e:
-            if "lock" in str(e).lower() and attempt < max_retries - 1:
-                print(f"[db] Write lock conflict, retrying ({attempt+1}/{max_retries})...")
-                _time.sleep(retry_delay)
-            else:
-                print(f"[db] update_complaint_routing failed: {e}")
-                return False
-    return False
+) -> None:
+    """Update editable fields on a routing_decision row."""
+    conn = get_routing_conn()
+    conn.execute("""
+        UPDATE routing_decisions
+        SET routed_team=?, escalate=?, escalate_to=?, action=?,
+            routing_reason=?, team_email=?
+        WHERE complaint_id=?
+    """, [routed_team, escalate, escalate_to, action,
+          routing_reason, team_email, complaint_id])
+    conn.close()
 
 
 # ── Dashboard functions (used by app_form_v2.py) ──────────────────────────────
