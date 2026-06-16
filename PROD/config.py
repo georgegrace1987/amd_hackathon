@@ -4,10 +4,10 @@ All modules import from here. Edit VLLM_HOST and VLLM_MODEL before running.
 """
 
 # ── vLLM ──────────────────────────────────────────────────────────────────────
-VLLM_HOST     = "http://localhost:8000"     # update to AMD VM IP
+VLLM_HOST     = "http://localhost:8000"    
 VLLM_BASE_URL = f"{VLLM_HOST}/v1"
-VLLM_MODEL    = "Qwen2.5-7B-Instruct"      # match --served-model-name exactly
-
+VLLM_MODEL    = "Qwen2.5-7B-Instruct"     
+VLLM_API_KEY  = "abc-123"  # locally run model api key
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 DB_PATH      = "complaints.duckdb"
