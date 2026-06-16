@@ -1,0 +1,82 @@
+[
+  {
+    "customer_id": "3417363165944382",
+    "cust_name": "Sanjay Gupta",
+    "cust_email": "sanjay.gupta20@outlook.com",
+    "complaint": "UPI transaction failed and deducted Rs 15,000 from my account, but the money never reached the recipient. This is unacceptable!",
+    "category": "net_banking_upi",
+    "channel": "web",
+    "branch": null,
+    "account_type": "savings"
+  },
+  {
+    "customer_id": "6462033040171608",
+    "cust_name": "Sanjay Patel",
+    "cust_email": "sanjay.patel26@rediffmail.com",
+    "complaint": "I visited the branch three times for my fixed deposit issue, and each time I was told to come back the next day. My time is valuable, you know!",
+    "category": "branch_atm",
+    "channel": "branch",
+    "branch": "Goregaon",
+    "account_type": "savings"
+  },
+  {
+    "customer_id": "4609283464926757",
+    "cust_name": "Vinod Pillai",
+    "cust_email": "vinod.pillai34@rediffmail.com",
+    "complaint": "My SBI debit card was used for Rs 20,000 in Mumbai yesterday, a place I haven't been. Plz block it now!",
+    "category": "fraud",
+    "channel": "web",
+    "branch": null,
+    "account_type": "savings"
+  },
+  {
+    "customer_id": "1871500488705890",
+    "cust_name": "Pallavi Mehta",
+    "cust_email": "pallavi.mehta54@outlook.com",
+    "complaint": "My mother's hospital bill for the heart surgery was denied by the health insurance, even though she has a valid policy and all the documents were submitted on time. This is so frustrating!",
+    "category": "insurance",
+    "channel": "mobile_app",
+    "branch": "Thane",
+    "account_type": "insurance"
+  },
+  {
+    "customer_id": "9611329096556064",
+    "cust_name": "Suresh Kumar",
+    "cust_email": "suresh.kumar42@gmail.com",
+    "complaint": "Extra EMI of Rs 5000 was deducted this month from my home loan account without any prior notice or consent.",
+    "category": "loan_emi",
+    "channel": "web",
+    "branch": null,
+    "account_type": "loan"
+  },
+  {
+    "customer_id": "4551539592895246",
+    "cust_name": "Manish Rao",
+    "cust_email": "manish.rao93@rediffmail.com",
+    "complaint": "My HDFC credit card got declined for no reason when I was trying to book flights online. This is so frustrating and needs to be sorted out quickly.",
+    "category": "card_dispute",
+    "channel": "branch",
+    "branch": "Kurla",
+    "account_type": "credit_card"
+  },
+  {
+    "customer_id": "5887681547977422",
+    "cust_name": "Pallavi Chopra",
+    "cust_email": null,
+    "complaint": "Extra EMI of Rs 5000 was deducted this month from my home loan account without any prior notice.",
+    "category": "loan_emi",
+    "channel": "mobile_app",
+    "branch": null,
+    "account_type": "loan"
+  },
+  {
+    "customer_id": "8157366430003918",
+    "cust_name": "Nikhil Chopra",
+    "cust_email": null,
+    "complaint": "My HDFC credit card got declined for no reason at the grocery store, and now I can't figure out how to get it working again. This is so frustrating!",
+    "category": "card_dispute",
+    "channel": "web",
+    "branch": "Goregaon",
+    "account_type": "credit_card"
+  }
+]
