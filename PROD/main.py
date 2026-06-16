@@ -1,5 +1,5 @@
 """
-main.py — Single entry point for the BFSI complaint pipeline.
+main.py — Single entry point for the BFSI complaint pipeline. Not needed if run using run_pipelinev2.py
 
 Usage:
     python main.py --mode initdb        # initialise DB tables only
